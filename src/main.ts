@@ -65,8 +65,7 @@ export default class VaultSyncPlugin extends Plugin {
 
   private connectToSync(): void {
     try {
-      new Notice(`Vault Sync: command fired, settings=${JSON.stringify(this.settings)}`);
-      const modal = new ConnectModal(this.app, this.settings, async (host, code) => {
+      new ConnectModal(this.app, this.settings, async (host, code) => {
         this.settings.lastHostIp = host;
         await this.saveSettings();
         await runClientSync(
@@ -77,12 +76,9 @@ export default class VaultSyncPlugin extends Plugin {
           code,
           () => this.saveSettings(),
         );
-      });
-      new Notice('Vault Sync: opening modal...');
-      modal.open();
-      new Notice('Vault Sync: modal.open() called');
+      }).open();
     } catch (err) {
-      new Notice(`Vault Sync ERROR: ${err}`);
+      new Notice(`Vault Sync error: ${err}`);
     }
   }
 }

@@ -1,8 +1,7 @@
 // Host sync flow — runs on desktop only, starts server and waits for client
 
-import { App, Notice } from 'obsidian';
+import { App, Notice, Platform } from 'obsidian';
 import { SyncSettings } from './types';
-import { startServer } from './server';
 import { HostModal } from './host-modal';
 import { FilePickerModal } from './file-picker-modal';
 
@@ -41,7 +40,9 @@ async function startHostServer(
   let hostModal: HostModal | null = null;
 
   try {
-    handle.stopServer = await startServer(app, settings, (code, ip) => {
+    // Dynamic import to avoid loading Node.js modules (http, os) on iOS
+    const { startServer } = require('./server');
+    handle.stopServer = await startServer(app, settings, (code: string, ip: string) => {
       hostModal = new HostModal(app, {
         ip,
         code,
