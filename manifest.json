@@ -1,7 +1,7 @@
 {
   "id": "vault-sync",
   "name": "Vault Sync",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "1.0.0",
   "description": "Local-network vault sync between desktop and mobile (like Send Anywhere).",
   "author": "duongbibo",
