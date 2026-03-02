@@ -1,12 +1,12 @@
 // Modal for entering host IP + 4-digit code on client (mobile/desktop)
+// Uses raw HTML elements instead of TextComponent for iOS compatibility
 
-import { App, Modal, Notice, TextComponent } from 'obsidian';
+import { App, Modal, Notice } from 'obsidian';
 import { SyncSettings } from './types';
 
 export class ConnectModal extends Modal {
   private settings: SyncSettings;
   private onSubmit: (host: string, code: string) => void;
-  private errorEl!: HTMLElement;
 
   constructor(
     app: App,
@@ -20,57 +20,59 @@ export class ConnectModal extends Modal {
 
   onOpen(): void {
     const { contentEl } = this;
-    contentEl.addClass('vault-sync-connect-modal');
+    contentEl.empty();
     contentEl.createEl('h2', { text: 'Vault Sync — Connect' });
 
-    let hostInput: TextComponent;
-    let codeInput: TextComponent;
+    // Host IP
+    contentEl.createEl('label', { text: 'Host IP address' });
+    const hostInput = contentEl.createEl('input', { type: 'text' });
+    hostInput.placeholder = '192.168.1.x';
+    hostInput.value = this.settings.lastHostIp || '';
+    hostInput.style.width = '100%';
+    hostInput.style.marginBottom = '12px';
+    hostInput.style.padding = '8px';
+    hostInput.style.fontSize = '16px';
 
-    // Host IP field
-    const ipGroup = contentEl.createDiv({ cls: 'vault-sync-field-group' });
-    ipGroup.createEl('label', { text: 'Host IP address', cls: 'vault-sync-label' });
-    hostInput = new TextComponent(ipGroup)
-      .setPlaceholder('192.168.1.x')
-      .setValue(this.settings.lastHostIp);
-    hostInput.inputEl.className += ' vault-sync-input';
-    hostInput.inputEl.style.width = '100%';
+    // Code
+    contentEl.createEl('label', { text: '4-digit code' });
+    const codeInput = contentEl.createEl('input', { type: 'text' });
+    codeInput.placeholder = '0000';
+    codeInput.maxLength = 4;
+    codeInput.inputMode = 'numeric';
+    codeInput.style.width = '100%';
+    codeInput.style.marginBottom = '12px';
+    codeInput.style.padding = '8px';
+    codeInput.style.fontSize = '24px';
+    codeInput.style.textAlign = 'center';
+    codeInput.style.letterSpacing = '8px';
 
-    // Code field
-    const codeGroup = contentEl.createDiv({ cls: 'vault-sync-field-group' });
-    codeGroup.createEl('label', { text: '4-digit code (shown on host)', cls: 'vault-sync-label' });
-    codeInput = new TextComponent(codeGroup).setPlaceholder('0000');
-    codeInput.inputEl.className += ' vault-sync-input vault-sync-code-input';
-    codeInput.inputEl.style.width = '100%';
-    codeInput.inputEl.maxLength = 4;
-    codeInput.inputEl.inputMode = 'numeric';
-
-    // Auto-focus code field if IP is pre-filled
-    if (this.settings.lastHostIp) {
-      setTimeout(() => codeInput.inputEl.focus(), 50);
-    } else {
-      setTimeout(() => hostInput.inputEl.focus(), 50);
-    }
-
-    // Error message (hidden initially)
-    this.errorEl = contentEl.createEl('p', { cls: 'vault-sync-error vault-sync-error--hidden' });
+    // Error text
+    const errorEl = contentEl.createEl('p');
+    errorEl.style.color = 'red';
+    errorEl.style.display = 'none';
 
     // Buttons
-    const btnRow = contentEl.createDiv({ cls: 'vault-sync-btn-row' });
-    const connectBtn = btnRow.createEl('button', { text: 'Connect', cls: 'mod-cta' });
+    const btnRow = contentEl.createDiv();
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '8px';
+    btnRow.style.marginTop = '12px';
+
+    const connectBtn = btnRow.createEl('button', { text: 'Connect' });
+    connectBtn.classList.add('mod-cta');
     const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
 
     const handleConnect = () => {
-      const host = hostInput.getValue().trim();
-      const code = codeInput.getValue().trim();
+      const host = hostInput.value.trim();
+      const code = codeInput.value.trim();
 
-      if (!this.validateIp(host)) {
-        this.showError('Please enter a valid IP address (e.g. 192.168.1.x)');
-        hostInput.inputEl.focus();
+      if (!host || host.split('.').length !== 4) {
+        errorEl.textContent = 'Enter a valid IP (e.g. 192.168.1.105)';
+        errorEl.style.display = 'block';
         return;
       }
       if (!/^\d{4}$/.test(code)) {
-        this.showError('Code must be exactly 4 digits.');
-        codeInput.inputEl.focus();
+        errorEl.textContent = 'Code must be 4 digits';
+        errorEl.style.display = 'block';
         return;
       }
 
@@ -79,28 +81,16 @@ export class ConnectModal extends Modal {
     };
 
     connectBtn.addEventListener('click', handleConnect);
-
-    // Allow Enter key to submit
-    codeInput.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    codeInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleConnect();
     });
-
     cancelBtn.addEventListener('click', () => this.close());
-  }
 
-  private validateIp(ip: string): boolean {
-    if (!ip) return false;
-    const parts = ip.split('.');
-    if (parts.length !== 4) return false;
-    return parts.every(p => {
-      const n = parseInt(p, 10);
-      return !isNaN(n) && n >= 0 && n <= 255 && String(n) === p;
-    });
-  }
-
-  private showError(msg: string): void {
-    this.errorEl.textContent = msg;
-    this.errorEl.removeClass('vault-sync-error--hidden');
+    // Focus
+    setTimeout(() => {
+      if (this.settings.lastHostIp) codeInput.focus();
+      else hostInput.focus();
+    }, 100);
   }
 
   onClose(): void {
