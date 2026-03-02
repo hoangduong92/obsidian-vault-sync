@@ -1,7 +1,7 @@
 // HTTP server — Desktop only (Node.js http module via Electron)
 // Endpoints: /auth, /manifest (GET/POST), /file (GET/POST), /complete
 
-import * as http from 'http';
+// http is loaded dynamically inside startServer() to avoid crashing on iOS
 import { App, Platform } from 'obsidian';
 import { generateCode, generateToken } from './crypto';
 import { scanVault, readVaultFile, writeVaultFile } from './vault-scanner';
@@ -14,7 +14,7 @@ import { computeDiff } from './sync-engine';
 const PORT = 53217;
 
 // CORS + JSON helpers
-function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
+function sendJson(res: any, status: number, data: unknown): void {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json',
@@ -25,7 +25,7 @@ function sendJson(res: http.ServerResponse, status: number, data: unknown): void
   res.end(body);
 }
 
-function sendBinary(res: http.ServerResponse, data: Buffer): void {
+function sendBinary(res: any, data: Buffer): void {
   res.writeHead(200, {
     'Content-Type': 'application/octet-stream',
     'Access-Control-Allow-Origin': '*',
@@ -34,7 +34,7 @@ function sendBinary(res: http.ServerResponse, data: Buffer): void {
   res.end(data);
 }
 
-async function readBody(req: http.IncomingMessage): Promise<Buffer> {
+async function readBody(req: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on('data', chunk => chunks.push(chunk));
@@ -43,7 +43,7 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   });
 }
 
-function validateToken(req: http.IncomingMessage, session: ServerSession): boolean {
+function validateToken(req: any, session: ServerSession): boolean {
   return req.headers['x-token'] === session.token;
 }
 
@@ -62,7 +62,9 @@ export async function startServer(
     active: true,
   };
 
-  const server = http.createServer(async (req, res) => {
+  // Dynamic require to avoid loading on iOS
+  const http = require('http');
+  const server = http.createServer(async (req: any, res: any) => {
     if (!session.active) { sendJson(res, 503, { error: 'Server stopped' }); return; }
 
     const url = new URL(req.url ?? '/', `http://localhost`);
@@ -102,8 +104,8 @@ async function handleRequest(
   session: ServerSession,
   url: URL,
   method: string,
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
+  req: any,
+  res: any,
 ): Promise<void> {
   const path = url.pathname;
 
