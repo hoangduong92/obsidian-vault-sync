@@ -64,6 +64,9 @@ export default class VaultSyncPlugin extends Plugin {
   // ── Client flow ────────────────────────────────────────────
 
   private connectToSync(): void {
+    try {
+      new Notice('Opening connect dialog...');
+    } catch (_) { /* ignore */ }
     new ConnectModal(this.app, this.settings, async (host, code) => {
       this.settings.lastHostIp = host;
       await this.saveSettings();
