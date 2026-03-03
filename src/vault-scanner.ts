@@ -53,10 +53,10 @@ export async function scanVault(
  */
 export async function readVaultFile(app: App, path: string): Promise<ArrayBuffer> {
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof (await import('obsidian')).TFile)) {
+  if (!(file instanceof TFile)) {
     throw new Error(`File not found: ${path}`);
   }
-  return app.vault.readBinary(file as TFile);
+  return app.vault.readBinary(file);
 }
 
 /**
@@ -69,10 +69,10 @@ export async function writeVaultFile(
 ): Promise<void> {
   const existing = app.vault.getAbstractFileByPath(path);
 
-  // Ensure parent folder exists
+  // Ensure all ancestor folders exist
   const parts = path.split('/');
-  if (parts.length > 1) {
-    const folder = parts.slice(0, -1).join('/');
+  for (let i = 1; i < parts.length; i++) {
+    const folder = parts.slice(0, i).join('/');
     if (!app.vault.getAbstractFileByPath(folder)) {
       await app.vault.createFolder(folder);
     }

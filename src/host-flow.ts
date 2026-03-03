@@ -42,17 +42,27 @@ async function startHostServer(
   try {
     // Dynamic import to avoid loading Node.js modules (http, os) on iOS
     const { startServer } = require('./server');
-    handle.stopServer = await startServer(app, settings, (code: string, ip: string) => {
-      hostModal = new HostModal(app, {
-        ip,
-        code,
-        port: settings.port,
-        onCancel: () => {
-          handle.stopServer?.();
-          handle.stopServer = null;
-        },
-      });
-      hostModal.open();
+    handle.stopServer = await startServer(app, settings, {
+      onReady: (code: string, ip: string) => {
+        hostModal = new HostModal(app, {
+          ip,
+          code,
+          port: settings.port,
+          onCancel: () => {
+            handle.stopServer?.();
+            handle.stopServer = null;
+          },
+        });
+        hostModal.open();
+      },
+      onClientConnected: () => {
+        hostModal?.setConnected();
+      },
+      onComplete: () => {
+        handle.stopServer = null;
+        hostModal?.complete();
+        new Notice('Sync session complete — server stopped.');
+      },
     });
 
     // Auto-stop after 10 minutes

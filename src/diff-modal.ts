@@ -1,7 +1,7 @@
 // Diff modal — review sync changes before confirming
 
 import { App, Modal } from 'obsidian';
-import { SyncDiffEntry } from './types';
+import { SyncDiffEntry, formatSize } from './types';
 
 export type ConflictResolution = 'keep_local' | 'keep_remote' | 'keep_both';
 
@@ -37,10 +37,14 @@ export class DiffModal extends Modal {
     } else {
       const uploads = diff.filter(e => e.action === 'upload');
       const downloads = diff.filter(e => e.action === 'download');
+      const deleteLocal = diff.filter(e => e.action === 'delete_local');
+      const deleteRemote = diff.filter(e => e.action === 'delete_remote');
       const conflicts = diff.filter(e => e.action === 'conflict');
 
       if (uploads.length > 0) this.renderSection(contentEl, `Upload to host (${uploads.length} file(s))`, '↑', uploads);
       if (downloads.length > 0) this.renderSection(contentEl, `Download from host (${downloads.length} file(s))`, '↓', downloads);
+      if (deleteLocal.length > 0) this.renderSection(contentEl, `Delete locally (${deleteLocal.length} file(s))`, '🗑', deleteLocal);
+      if (deleteRemote.length > 0) this.renderSection(contentEl, `Delete on host (${deleteRemote.length} file(s))`, '🗑', deleteRemote);
       if (conflicts.length > 0) this.renderConflicts(contentEl, conflicts);
     }
 
@@ -118,10 +122,4 @@ export class DiffModal extends Modal {
   onClose(): void {
     this.contentEl.empty();
   }
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

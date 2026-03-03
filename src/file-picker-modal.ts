@@ -1,6 +1,7 @@
 // File picker modal — select which vault files/folders to include in sync
 
 import { App, Modal, TFile } from 'obsidian';
+import { formatSize } from './types';
 
 interface FileGroup {
   folder: string;    // top-level folder name ('' for root files)
@@ -72,7 +73,9 @@ export class FilePickerModal extends Modal {
     });
 
     confirmBtn.addEventListener('click', () => {
-      this.opts.onConfirm([...this.checkedPaths]);
+      // If all files selected, store [] (meaning "all, including future new files")
+      const allSelected = this.checkedPaths.size >= this.allFiles.length;
+      this.opts.onConfirm(allSelected ? [] : [...this.checkedPaths]);
       this.close();
     });
 
@@ -177,10 +180,4 @@ export class FilePickerModal extends Modal {
   onClose(): void {
     this.contentEl.empty();
   }
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

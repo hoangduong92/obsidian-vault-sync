@@ -72,10 +72,10 @@ export async function sha256Hex(data: ArrayBuffer): Promise<string> {
     .join('');
 }
 
-/** Generate a random 4-digit numeric code string (e.g. "3821"). */
+/** Generate a random 6-digit numeric code string (e.g. "382104"). */
 export function generateCode(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 10000;
-  return n.toString().padStart(4, '0');
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
+  return n.toString().padStart(6, '0');
 }
 
 /** Generate a random 32-byte hex token for session auth. */

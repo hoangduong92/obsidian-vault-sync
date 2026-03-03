@@ -6,8 +6,10 @@ import { FileManifestEntry, SyncDiffEntry } from './types';
  * Compute a sync diff between local and remote manifests.
  *
  * Rules:
- *   - local only  → upload
- *   - remote only → download
+ *   - local only, was in baseline  → deleted on remote side → delete_local
+ *   - local only, not in baseline  → new file → upload
+ *   - remote only, was in baseline → deleted locally → delete_remote
+ *   - remote only, not in baseline → new file → download
  *   - both exist, same hash → skip (no-op, not included)
  *   - both exist, both modified since lastSyncTime → conflict
  *   - both exist, local newer → upload
@@ -17,9 +19,11 @@ export function computeDiff(
   localManifest: FileManifestEntry[],
   remoteManifest: FileManifestEntry[],
   lastSyncTime?: number,
+  baselineManifest?: FileManifestEntry[],
 ): SyncDiffEntry[] {
   const localMap = new Map(localManifest.map(e => [e.path, e]));
   const remoteMap = new Map(remoteManifest.map(e => [e.path, e]));
+  const baselineSet = new Set((baselineManifest ?? []).map(e => e.path));
   const allPaths = new Set([...localMap.keys(), ...remoteMap.keys()]);
 
   const diff: SyncDiffEntry[] = [];
@@ -29,12 +33,22 @@ export function computeDiff(
     const remote = remoteMap.get(path);
 
     if (local && !remote) {
-      diff.push({ path, action: 'upload', localEntry: local });
+      // Was it in the baseline? If so, it was deleted on remote → delete locally
+      if (baselineSet.has(path)) {
+        diff.push({ path, action: 'delete_local', localEntry: local });
+      } else {
+        diff.push({ path, action: 'upload', localEntry: local });
+      }
       continue;
     }
 
     if (!local && remote) {
-      diff.push({ path, action: 'download', remoteEntry: remote });
+      // Was it in the baseline? If so, it was deleted locally → delete on remote
+      if (baselineSet.has(path)) {
+        diff.push({ path, action: 'delete_remote', remoteEntry: remote });
+      } else {
+        diff.push({ path, action: 'download', remoteEntry: remote });
+      }
       continue;
     }
 

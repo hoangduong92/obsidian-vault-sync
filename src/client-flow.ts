@@ -1,6 +1,6 @@
 // Client sync flow — connects to host, exchanges manifests, transfers files
 
-import { App, Notice, Platform } from 'obsidian';
+import { App, Notice, Platform, TFile } from 'obsidian';
 import { SyncSettings, FileManifestEntry, SyncDiffEntry } from './types';
 import { scanVault, writeVaultFile } from './vault-scanner';
 import { computeDiff, conflictFilename } from './sync-engine';
@@ -8,6 +8,7 @@ import { FilePickerModal } from './file-picker-modal';
 import { DiffModal, ConflictResolution } from './diff-modal';
 import { ProgressModal } from './progress-modal';
 import * as client from './client';
+import { deriveKey } from './crypto';
 
 /**
  * Run the client connect flow:
@@ -30,11 +31,13 @@ export async function runClientSync(
 
   let token: string;
   let remoteManifest: FileManifestEntry[];
+  let encryptionKey: CryptoKey;
 
   try {
     const authResult = await client.authenticate(host, port, code, deviceName);
     token = authResult.token;
     remoteManifest = authResult.manifest;
+    encryptionKey = await deriveKey(code);
   } catch (err) {
     new Notice(`Connection failed: ${err}`);
     return;
@@ -50,8 +53,10 @@ export async function runClientSync(
       new Notice('Scanning local vault…');
       try {
         const localManifest = await scanVault(app, settings);
-        const diff = computeDiff(localManifest, remoteManifest);
-        showDiffAndSync(app, host, port, token, diff);
+        const lastSync = settings.lastSyncTime || undefined;
+        const baseline = settings.lastManifest.length > 0 ? settings.lastManifest : undefined;
+        const diff = computeDiff(localManifest, remoteManifest, lastSync, baseline);
+        showDiffAndSync(app, settings, host, port, token, encryptionKey, diff, onSettingsChanged);
       } catch (err) {
         new Notice(`Scan failed: ${err}`);
       }
@@ -64,10 +69,13 @@ export async function runClientSync(
 
 function showDiffAndSync(
   app: App,
+  settings: SyncSettings,
   host: string,
   port: number,
   token: string,
+  key: CryptoKey,
   diff: SyncDiffEntry[],
+  onSettingsChanged: () => Promise<void>,
 ): void {
   new DiffModal(app, {
     diff,
@@ -76,7 +84,7 @@ function showDiffAndSync(
         await client.complete(host, port, token).catch(() => undefined);
         return;
       }
-      await executeSync(app, host, port, token, diff, resolutions);
+      await executeSync(app, settings, host, port, token, key, diff, resolutions, onSettingsChanged);
     },
     onCancel: async () => {
       await client.complete(host, port, token).catch(() => undefined);
@@ -86,17 +94,17 @@ function showDiffAndSync(
 
 async function executeSync(
   app: App,
+  settings: SyncSettings,
   host: string,
   port: number,
   token: string,
+  key: CryptoKey,
   diff: SyncDiffEntry[],
   resolutions: Map<string, ConflictResolution>,
+  onSettingsChanged: () => Promise<void>,
 ): Promise<void> {
-  const actionable = diff.filter(
-    (e) => e.action !== 'delete_local' && e.action !== 'delete_remote',
-  );
   const progress = new ProgressModal(app, {
-    total: actionable.length,
+    total: diff.length,
     onCancel: async () => {
       await client.complete(host, port, token).catch(() => undefined);
     },
@@ -105,38 +113,51 @@ async function executeSync(
 
   let uploaded = 0,
     downloaded = 0,
+    deleted = 0,
     conflicts = 0;
   let current = 0;
 
   try {
-    for (const entry of actionable) {
+    for (const entry of diff) {
       if (progress.isCancelled) break;
       current++;
-      progress.updateProgress(current, actionable.length, entry.path);
+      progress.updateProgress(current, diff.length, entry.path);
 
       if (entry.action === 'upload') {
         const fileObj = app.vault.getAbstractFileByPath(entry.path);
         if (!fileObj) continue;
-        const content = await app.vault.readBinary(
-          fileObj as import('obsidian').TFile,
-        );
-        await client.uploadFile(host, port, token, entry.path, content);
+        const content = await app.vault.readBinary(fileObj as TFile);
+        await client.uploadFile(host, port, token, entry.path, content, key);
         uploaded++;
       } else if (entry.action === 'download') {
-        const content = await client.downloadFile(host, port, token, entry.path);
+        const content = await client.downloadFile(host, port, token, entry.path, key);
         await writeVaultFile(app, entry.path, content);
         downloaded++;
+      } else if (entry.action === 'delete_local') {
+        const fileObj = app.vault.getAbstractFileByPath(entry.path);
+        if (fileObj instanceof TFile) {
+          await app.vault.delete(fileObj);
+          deleted++;
+        }
+      } else if (entry.action === 'delete_remote') {
+        await client.deleteRemoteFile(host, port, token, entry.path);
+        deleted++;
       } else if (entry.action === 'conflict') {
         const resolution = resolutions.get(entry.path) ?? 'keep_both';
-        await resolveConflict(app, host, port, token, entry.path, resolution);
+        await resolveConflict(app, host, port, token, key, entry.path, resolution);
         conflicts++;
       }
     }
 
     await client.complete(host, port, token);
+    // Save sync state: timestamp + snapshot of merged manifest
+    settings.lastSyncTime = Date.now();
+    const postSyncManifest = await scanVault(app, settings);
+    settings.lastManifest = postSyncManifest;
+    await onSettingsChanged();
     progress.complete();
     new Notice(
-      `Sync complete! ↑ ${uploaded}  ↓ ${downloaded}  ⚠ ${conflicts} conflict(s)`,
+      `Sync complete! ↑ ${uploaded}  ↓ ${downloaded}  🗑 ${deleted}  ⚠ ${conflicts} conflict(s)`,
     );
   } catch (err) {
     progress.error(String(err));
@@ -149,6 +170,7 @@ async function resolveConflict(
   host: string,
   port: number,
   token: string,
+  key: CryptoKey,
   filePath: string,
   resolution: ConflictResolution,
 ): Promise<void> {
@@ -158,14 +180,14 @@ async function resolveConflict(
       const content = await app.vault.readBinary(
         fileObj as import('obsidian').TFile,
       );
-      await client.uploadFile(host, port, token, filePath, content);
+      await client.uploadFile(host, port, token, filePath, content, key);
     }
   } else if (resolution === 'keep_remote') {
-    const content = await client.downloadFile(host, port, token, filePath);
+    const content = await client.downloadFile(host, port, token, filePath, key);
     await writeVaultFile(app, filePath, content);
   } else {
     // keep_both: save remote as conflict copy, keep local unchanged
-    const remoteContent = await client.downloadFile(host, port, token, filePath);
+    const remoteContent = await client.downloadFile(host, port, token, filePath, key);
     await writeVaultFile(app, conflictFilename(filePath), remoteContent);
   }
 }

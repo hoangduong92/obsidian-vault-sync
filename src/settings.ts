@@ -83,5 +83,7 @@ export function applyDefaults(saved: Partial<SyncSettings>): SyncSettings {
     lastHostIp: saved.lastHostIp ?? '',
     selectedPaths: saved.selectedPaths ?? [],
     port: saved.port ?? 53217,
+    lastSyncTime: saved.lastSyncTime ?? 0,
+    lastManifest: saved.lastManifest ?? [],
   };
 }

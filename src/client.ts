@@ -5,6 +5,7 @@ import {
   AuthResponse, FileManifestEntry,
   ManifestDiffResponse, SyncDiffEntry,
 } from './types';
+import { encrypt, decrypt } from './crypto';
 
 function baseUrl(host: string, port: number): string {
   return `http://${host}:${port}`;
@@ -66,12 +67,13 @@ export async function postManifest(
   return (resp.json as ManifestDiffResponse).diff;
 }
 
-/** Download a file from the host; returns raw bytes. */
+/** Download a file from the host; returns decrypted bytes. */
 export async function downloadFile(
   host: string,
   port: number,
   token: string,
   filePath: string,
+  key: CryptoKey,
 ): Promise<ArrayBuffer> {
   const resp = await requestUrl({
     url: `${baseUrl(host, port)}/file?path=${encodeURIComponent(filePath)}`,
@@ -80,25 +82,43 @@ export async function downloadFile(
     throw: false,
   });
   if (resp.status !== 200) throw new Error(`downloadFile failed: ${resp.status} (${filePath})`);
-  return resp.arrayBuffer;
+  return decrypt(resp.arrayBuffer, key);
 }
 
-/** Upload raw bytes to a path on the host. */
+/** Encrypt and upload raw bytes to a path on the host. */
 export async function uploadFile(
   host: string,
   port: number,
   token: string,
   filePath: string,
   content: ArrayBuffer,
+  key: CryptoKey,
 ): Promise<void> {
+  const encrypted = await encrypt(content, key);
   const resp = await requestUrl({
     url: `${baseUrl(host, port)}/file?path=${encodeURIComponent(filePath)}`,
     method: 'POST',
     headers: { 'X-Token': token, 'Content-Type': 'application/octet-stream' },
-    body: content,
+    body: encrypted,
     throw: false,
   });
   if (resp.status !== 200) throw new Error(`uploadFile failed: ${resp.status} (${filePath})`);
+}
+
+/** Delete a file on the host. */
+export async function deleteRemoteFile(
+  host: string,
+  port: number,
+  token: string,
+  filePath: string,
+): Promise<void> {
+  const resp = await requestUrl({
+    url: `${baseUrl(host, port)}/delete?path=${encodeURIComponent(filePath)}`,
+    method: 'POST',
+    headers: authHeaders(token),
+    throw: false,
+  });
+  if (resp.status !== 200) throw new Error(`deleteFile failed: ${resp.status} (${filePath})`);
 }
 
 /** Signal to host that the sync session is complete. */

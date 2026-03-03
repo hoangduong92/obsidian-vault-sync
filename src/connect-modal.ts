@@ -1,4 +1,4 @@
-// Modal for entering host IP + 4-digit code on client (mobile/desktop)
+// Modal for entering host IP + 6-digit code on client (mobile/desktop)
 // Uses raw HTML elements instead of TextComponent for iOS compatibility
 
 import { App, Modal, Notice } from 'obsidian';
@@ -34,10 +34,10 @@ export class ConnectModal extends Modal {
     hostInput.style.fontSize = '16px';
 
     // Code
-    contentEl.createEl('label', { text: '4-digit code' });
+    contentEl.createEl('label', { text: '6-digit code' });
     const codeInput = contentEl.createEl('input', { type: 'text' });
-    codeInput.placeholder = '0000';
-    codeInput.maxLength = 4;
+    codeInput.placeholder = '000000';
+    codeInput.maxLength = 6;
     codeInput.inputMode = 'numeric';
     codeInput.style.width = '100%';
     codeInput.style.marginBottom = '12px';
@@ -70,8 +70,8 @@ export class ConnectModal extends Modal {
         errorEl.style.display = 'block';
         return;
       }
-      if (!/^\d{4}$/.test(code)) {
-        errorEl.textContent = 'Code must be 4 digits';
+      if (!/^\d{6}$/.test(code)) {
+        errorEl.textContent = 'Code must be 6 digits';
         errorEl.style.display = 'block';
         return;
       }

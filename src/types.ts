@@ -18,12 +18,16 @@ export interface SyncSettings {
   lastHostIp: string;
   selectedPaths: string[]; // files/folders to sync (empty = all)
   port: number;            // default 53217
+  lastSyncTime: number;    // unix timestamp ms of last successful sync (0 = never)
+  lastManifest: FileManifestEntry[]; // snapshot of files after last sync (for deletion detection)
 }
 
 export const DEFAULT_SETTINGS: SyncSettings = {
   lastHostIp: '',
   selectedPaths: [],
   port: 53217,
+  lastSyncTime: 0,
+  lastManifest: [],
 };
 
 // Auth request/response
@@ -52,4 +56,13 @@ export interface ServerSession {
   token: string | null;
   manifest: FileManifestEntry[];
   active: boolean;
+  failedAuthAttempts: number;
+  lastFailedAuthTime: number;
+}
+
+// Shared utility
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
