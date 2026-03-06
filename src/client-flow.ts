@@ -26,7 +26,7 @@ export async function runClientSync(
   onSettingsChanged: () => Promise<void>,
 ): Promise<void> {
   const deviceName = Platform.isMobileApp ? 'iOS' : 'Desktop';
-  new Notice('Connecting…');
+  new Notice(`[VaultSync] Connecting to ${host}:${port}...`, 5000);
 
   let token: string;
   let remoteManifest: FileManifestEntry[];
@@ -35,8 +35,9 @@ export async function runClientSync(
     const authResult = await client.authenticate(host, port, code, deviceName);
     token = authResult.token;
     remoteManifest = authResult.manifest;
+    new Notice(`[VaultSync] Connected! ${remoteManifest.length} remote files.`, 5000);
   } catch (err) {
-    new Notice(`Connection failed: ${err}`);
+    new Notice(`[VaultSync] Connection failed: ${err}`, 10000);
     return;
   }
 

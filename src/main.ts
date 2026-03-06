@@ -64,21 +64,26 @@ export default class VaultSyncPlugin extends Plugin {
   // ── Client flow ────────────────────────────────────────────
 
   private connectToSync(): void {
+    new Notice('[VaultSync] Opening connect dialog...');
     try {
       new ConnectModal(this.app, this.settings, async (host, code) => {
-        this.settings.lastHostIp = host;
-        await this.saveSettings();
-        await runClientSync(
-          this.app,
-          this.settings,
-          host,
-          this.settings.port,
-          code,
-          () => this.saveSettings(),
-        );
+        try {
+          this.settings.lastHostIp = host;
+          await this.saveSettings();
+          await runClientSync(
+            this.app,
+            this.settings,
+            host,
+            this.settings.port,
+            code,
+            () => this.saveSettings(),
+          );
+        } catch (err) {
+          new Notice(`Vault Sync error: ${err}`, 10000);
+        }
       }).open();
     } catch (err) {
-      new Notice(`Vault Sync error: ${err}`);
+      new Notice(`Vault Sync modal error: ${err}`, 10000);
     }
   }
 }
