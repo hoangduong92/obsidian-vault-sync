@@ -10,6 +10,8 @@ import {
   ManifestDiffResponse, ServerSession, SyncSettings,
 } from './types';
 import { computeDiff } from './sync-engine';
+import { getWebUiHtml } from './web-ui-html';
+import { createZip } from './zip-builder';
 
 const PORT = 53217;
 
@@ -83,14 +85,17 @@ export async function startServer(
 
   server.listen(PORT, '0.0.0.0', () => {
     // Determine local IP via os.networkInterfaces
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // Skip virtual adapters (WSL, Hyper-V, Docker, VPN) to find real WiFi/Ethernet IP
     const os = require('os') as typeof import('os');
     const ifaces = os.networkInterfaces();
     let ip = '127.0.0.1';
-    for (const iface of Object.values(ifaces)) {
-      for (const addr of iface ?? []) {
+    const skipNames = /^(vEthernet|WSL|docker|br-|virbr|vmnet|vbox|tun|tap)/i;
+    for (const [name, addrs] of Object.entries(ifaces)) {
+      if (skipNames.test(name)) continue;
+      for (const addr of addrs ?? []) {
         if (addr.family === 'IPv4' && !addr.internal) { ip = addr.address; break; }
       }
+      if (ip !== '127.0.0.1') break;
     }
     onReady(session.code, ip);
   });
@@ -108,6 +113,20 @@ async function handleRequest(
   res: any,
 ): Promise<void> {
   const path = url.pathname;
+
+  // GET / — serve web UI for mobile browser sync
+  if (path === '/' && method === 'GET') {
+    const html = getWebUiHtml();
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(html);
+    return;
+  }
+
+  // GET /vault-info — return vault name (no auth needed, used by web UI)
+  if (path === '/vault-info' && method === 'GET') {
+    sendJson(res, 200, { name: app.vault.getName() });
+    return;
+  }
 
   // POST /auth — validate code, issue token, return manifest
   if (path === '/auth' && method === 'POST') {
@@ -153,6 +172,25 @@ async function handleRequest(
     const body = await readBody(req);
     await writeVaultFile(app, filePath, body.buffer as ArrayBuffer);
     sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  // GET /download-all — zip all selected vault files into one download
+  if (path === '/download-all' && method === 'GET') {
+    const files: { path: string; data: Buffer }[] = [];
+    for (const entry of session.manifest) {
+      try {
+        const content = await readVaultFile(app, entry.path);
+        files.push({ path: entry.path, data: Buffer.from(content) });
+      } catch { /* skip unreadable */ }
+    }
+    const zip = createZip(files);
+    res.writeHead(200, {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': 'attachment; filename="vault-sync.zip"',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(zip);
     return;
   }
 

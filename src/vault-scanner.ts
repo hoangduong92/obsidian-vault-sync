@@ -53,10 +53,10 @@ export async function scanVault(
  */
 export async function readVaultFile(app: App, path: string): Promise<ArrayBuffer> {
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof (await import('obsidian')).TFile)) {
+  if (!(file instanceof TFile)) {
     throw new Error(`File not found: ${path}`);
   }
-  return app.vault.readBinary(file as TFile);
+  return app.vault.readBinary(file);
 }
 
 /**
