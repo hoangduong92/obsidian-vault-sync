@@ -7,7 +7,7 @@ import { generateCode, generateToken } from './crypto';
 import { scanVault, readVaultFile, writeVaultFile } from './vault-scanner';
 import {
   AuthRequest, AuthResponse, ManifestDiffRequest,
-  ManifestDiffResponse, ServerSession, SyncSettings,
+  ManifestDiffResponse, ServerSession, SyncSettings, SyncStatus,
 } from './types';
 import { computeDiff } from './sync-engine';
 import { getWebUiHtml } from './web-ui-html';
@@ -39,7 +39,7 @@ function sendBinary(res: any, data: Buffer): void {
 async function readBody(req: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', chunk => chunks.push(chunk));
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -62,6 +62,7 @@ export async function startServer(
     token: null,
     manifest: await scanVault(app, settings),
     active: true,
+    syncStatus: { phase: 'idle', progress: 0, current: '', total: 0, done: 0, errors: [] },
   };
 
   // Dynamic require to avoid loading on iOS
@@ -191,6 +192,20 @@ async function handleRequest(
       'Access-Control-Allow-Origin': '*',
     });
     res.end(zip);
+    return;
+  }
+
+  // GET /sync-status — return current sync progress (polled by web UI)
+  if (path === '/sync-status' && method === 'GET') {
+    sendJson(res, 200, session.syncStatus);
+    return;
+  }
+
+  // POST /sync-status — protocol handler reports progress
+  if (path === '/sync-status' && method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString()) as SyncStatus;
+    session.syncStatus = body;
+    sendJson(res, 200, { ok: true });
     return;
   }
 

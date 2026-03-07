@@ -46,10 +46,21 @@ export interface ManifestDiffResponse {
   diff: SyncDiffEntry[];
 }
 
+// Sync status for progress tracking (protocol handler → server → web UI polling)
+export interface SyncStatus {
+  phase: 'idle' | 'scanning' | 'downloading' | 'uploading' | 'writing' | 'complete' | 'error';
+  progress: number;     // 0-100
+  current: string;      // current file path
+  total: number;
+  done: number;
+  errors: string[];
+}
+
 // Internal server state
 export interface ServerSession {
   code: string;
   token: string | null;
   manifest: FileManifestEntry[];
   active: boolean;
+  syncStatus: SyncStatus;
 }

@@ -3,7 +3,7 @@
 import { requestUrl } from 'obsidian';
 import {
   AuthResponse, FileManifestEntry,
-  ManifestDiffResponse, SyncDiffEntry,
+  ManifestDiffResponse, SyncDiffEntry, SyncStatus,
 } from './types';
 
 function baseUrl(host: string, port: number): string {
@@ -99,6 +99,19 @@ export async function uploadFile(
     throw: false,
   });
   if (resp.status !== 200) throw new Error(`uploadFile failed: ${resp.status} (${filePath})`);
+}
+
+/** Post sync progress status to the host server (for web UI polling). */
+export async function postSyncStatus(
+  host: string, port: number, token: string, status: SyncStatus,
+): Promise<void> {
+  await requestUrl({
+    url: `${baseUrl(host, port)}/sync-status`,
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(status),
+    throw: false,
+  });
 }
 
 /** Signal to host that the sync session is complete. */

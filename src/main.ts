@@ -6,6 +6,7 @@ import { VaultSyncSettingTab, applyDefaults } from './settings';
 import { ConnectModal } from './connect-modal';
 import { launchHostFlow, HostFlowHandle } from './host-flow';
 import { runClientSync } from './client-flow';
+import { runProtocolSync } from './protocol-sync-handler';
 
 export default class VaultSyncPlugin extends Plugin {
   settings!: SyncSettings;
@@ -25,6 +26,18 @@ export default class VaultSyncPlugin extends Plugin {
       id: 'connect-to-sync',
       name: 'Connect to Sync',
       callback: () => this.connectToSync(),
+    });
+
+    // obsidian://vault-sync?action=pull&token=x&ip=x&port=53217
+    this.registerObsidianProtocolHandler('vault-sync', async (params) => {
+      const { action, token, ip, port } = params;
+      if (!action || !token || !ip) {
+        new Notice('[VaultSync] Invalid URI — missing action, token, or ip');
+        return;
+      }
+      await runProtocolSync(
+        this.app, this.settings, action, ip, parseInt(port || '53217'), token,
+      );
     });
   }
 
@@ -64,6 +77,11 @@ export default class VaultSyncPlugin extends Plugin {
   // ── Client flow ────────────────────────────────────────────
 
   private connectToSync(): void {
+    if (Platform.isMobile) {
+      const ip = this.settings.lastHostIp || '<PC-IP>';
+      new Notice(`On mobile, use Safari: http://${ip}:${this.settings.port}`, 10000);
+      return;
+    }
     new Notice('[VaultSync] Opening connect dialog...');
     try {
       new ConnectModal(this.app, this.settings, async (host, code) => {
