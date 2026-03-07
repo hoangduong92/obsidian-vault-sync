@@ -194,11 +194,13 @@ function renderFileList() {
 }
 
 function doSync(action) {
-  log('Starting ' + action + ' via obsidian:// URI');
-  const uri = 'obsidian://vaultsync?action=' + action
-    + '&token=' + encodeURIComponent(token)
-    + '&ip=' + encodeURIComponent(HOST_IP)
-    + '&port=' + HOST_PORT;
+  log('Starting ' + action + ' via obsidian://new trigger file');
+  // Create trigger file in vault: plugin watches for it, reads params, runs sync
+  const triggerContent = action + '|' + token + '|' + HOST_IP + '|' + HOST_PORT;
+  const uri = 'obsidian://new?vault=' + encodeURIComponent(vaultName)
+    + '&file=.vault-sync-trigger'
+    + '&content=' + encodeURIComponent(triggerContent)
+    + '&overwrite=true';
   log('URI: ' + uri);
 
   show('step-sync');
