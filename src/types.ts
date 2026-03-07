@@ -63,4 +63,5 @@ export interface ServerSession {
   manifest: FileManifestEntry[];
   active: boolean;
   syncStatus: SyncStatus;
+  syncIntent: { action: string; token: string } | null;
 }

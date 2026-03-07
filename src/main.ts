@@ -1,14 +1,12 @@
 // Main plugin entry point for vault-sync
 
-import { Notice, Platform, Plugin, TFile, TAbstractFile } from 'obsidian';
+import { Notice, Platform, Plugin } from 'obsidian';
 import { SyncSettings } from './types';
 import { VaultSyncSettingTab, applyDefaults } from './settings';
 import { ConnectModal } from './connect-modal';
 import { launchHostFlow, HostFlowHandle } from './host-flow';
 import { runClientSync } from './client-flow';
 import { runProtocolSync } from './protocol-sync-handler';
-
-const TRIGGER_FILE = '.vault-sync-trigger.md';
 
 export default class VaultSyncPlugin extends Plugin {
   settings!: SyncSettings;
@@ -30,7 +28,14 @@ export default class VaultSyncPlugin extends Plugin {
       callback: () => this.connectToSync(),
     });
 
-    // Protocol handler (works on desktop, may not work on iOS)
+    // Mobile: "Sync Now" command fetches pending intent from server and runs sync
+    this.addCommand({
+      id: 'sync-now',
+      name: 'Sync Now (from Safari)',
+      callback: () => this.syncNow(),
+    });
+
+    // Protocol handler (works on desktop)
     this.registerObsidianProtocolHandler('vaultsync', async (params) => {
       const { action, token, ip, port } = params;
       if (!action || !token || !ip) {
@@ -41,26 +46,6 @@ export default class VaultSyncPlugin extends Plugin {
         this.app, this.settings, action, ip, parseInt(port || '53217'), token,
       );
     });
-
-    // File-based trigger: Safari creates .vault-sync-trigger.md via obsidian://new
-    // Plugin watches for it, reads params, deletes file, runs sync
-    this.registerEvent(
-      this.app.vault.on('create', (file: TAbstractFile) => {
-        if (file.path === TRIGGER_FILE && file instanceof TFile) {
-          this.handleTriggerFile(file);
-        }
-      }),
-    );
-    this.registerEvent(
-      this.app.vault.on('modify', (file: TAbstractFile) => {
-        if (file.path === TRIGGER_FILE && file instanceof TFile) {
-          this.handleTriggerFile(file);
-        }
-      }),
-    );
-
-    // Check on startup in case trigger file already exists
-    this.app.workspace.onLayoutReady(() => this.checkExistingTrigger());
   }
 
   onunload(): void {
@@ -76,29 +61,35 @@ export default class VaultSyncPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  // ── Trigger file handler (iOS workaround) ─────────────────
+  // ── Sync Now (mobile command) ─────────────────────────────
 
-  private async handleTriggerFile(file: TFile): Promise<void> {
+  private async syncNow(): Promise<void> {
+    const ip = this.settings.lastHostIp;
+    const port = this.settings.port;
+    if (!ip) {
+      new Notice('[VaultSync] No server IP configured. Use Safari UI first.', 8000);
+      return;
+    }
+    new Notice('[VaultSync] Checking for sync intent...');
     try {
-      const content = await this.app.vault.read(file);
-      await this.app.vault.delete(file);
-      // Format: action|token|ip|port
-      const parts = content.trim().split('|');
-      if (parts.length < 4) {
-        new Notice('[VaultSync] Invalid trigger file format');
+      const { requestUrl } = await import('obsidian');
+      const resp = await requestUrl({
+        url: `http://${ip}:${port}/sync-intent`,
+        method: 'GET',
+        throw: false,
+      });
+      if (resp.status !== 200) {
+        new Notice('[VaultSync] No pending sync or server not running.', 8000);
         return;
       }
-      const [action, token, ip, port] = parts;
-      await runProtocolSync(this.app, this.settings, action, ip, parseInt(port), token);
+      const intent = resp.json as { action: string; token: string };
+      if (!intent.action || !intent.token) {
+        new Notice('[VaultSync] No pending sync intent.', 8000);
+        return;
+      }
+      await runProtocolSync(this.app, this.settings, intent.action, ip, port, intent.token);
     } catch (err) {
-      new Notice(`[VaultSync] Trigger error: ${err}`, 10000);
-    }
-  }
-
-  private async checkExistingTrigger(): Promise<void> {
-    const file = this.app.vault.getAbstractFileByPath(TRIGGER_FILE);
-    if (file instanceof TFile) {
-      await this.handleTriggerFile(file);
+      new Notice(`[VaultSync] Sync error: ${err}`, 10000);
     }
   }
 

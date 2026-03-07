@@ -193,28 +193,22 @@ function renderFileList() {
   }
 }
 
-function doSync(action) {
-  log('Starting ' + action + ' via obsidian://new trigger file');
-  // Create trigger file in vault: plugin watches for it, reads params, runs sync
-  const triggerContent = action + '|' + token + '|' + HOST_IP + '|' + HOST_PORT;
-  const uri = 'obsidian://new?vault=' + encodeURIComponent(vaultName)
-    + '&file=.vault-sync-trigger'
-    + '&content=' + encodeURIComponent(triggerContent)
-    + '&overwrite=true';
-  log('URI: ' + uri);
+async function doSync(action) {
+  log('Storing sync intent: ' + action);
+  try {
+    const res = await api('POST', '/sync-intent', { action });
+    if (!res.ok) { log('Failed to store intent: ' + res.status); return; }
+  } catch (e) { log('Intent error: ' + e.message); return; }
 
   show('step-sync');
-  document.getElementById('sync-phase').textContent = 'Opening Obsidian...';
+  document.getElementById('sync-phase').textContent = 'Intent stored! Open Obsidian now.';
   document.getElementById('sync-progress').style.width = '0%';
-  document.getElementById('sync-counter').textContent = '';
+  document.getElementById('sync-counter').textContent = 'In Obsidian: Command palette → "Sync Now (from Safari)"';
   document.getElementById('sync-current').textContent = '';
   document.getElementById('sync-errors').innerHTML = '';
 
-  // Navigate to obsidian:// URI
-  window.location.href = uri;
-
-  // Start polling sync status after a short delay
-  setTimeout(() => startPolling(), 1500);
+  // Start polling — will update once plugin starts syncing
+  startPolling();
 }
 
 function startPolling() {

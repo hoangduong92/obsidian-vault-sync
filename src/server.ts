@@ -63,6 +63,7 @@ export async function startServer(
     manifest: await scanVault(app, settings),
     active: true,
     syncStatus: { phase: 'idle', progress: 0, current: '', total: 0, done: 0, errors: [] },
+    syncIntent: null,
   };
 
   // Dynamic require to avoid loading on iOS
@@ -129,6 +130,17 @@ async function handleRequest(
     return;
   }
 
+  // GET /sync-intent — plugin on iPhone fetches pending sync command (no auth needed)
+  if (path === '/sync-intent' && method === 'GET') {
+    if (!session.syncIntent) {
+      sendJson(res, 200, { action: null, token: null });
+    } else {
+      sendJson(res, 200, session.syncIntent);
+      session.syncIntent = null; // consume once
+    }
+    return;
+  }
+
   // POST /auth — validate code, issue token, return manifest
   if (path === '/auth' && method === 'POST') {
     const body = JSON.parse((await readBody(req)).toString()) as AuthRequest;
@@ -192,6 +204,14 @@ async function handleRequest(
       'Access-Control-Allow-Origin': '*',
     });
     res.end(zip);
+    return;
+  }
+
+  // POST /sync-intent — web UI stores sync command for plugin to fetch
+  if (path === '/sync-intent' && method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString()) as { action: string };
+    session.syncIntent = { action: body.action, token: session.token! };
+    sendJson(res, 200, { ok: true });
     return;
   }
 
