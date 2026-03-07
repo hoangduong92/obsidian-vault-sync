@@ -1,6 +1,6 @@
 {
   "name": "obsidian-vault-sync",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Local-network vault sync plugin for Obsidian",
   "main": "main.js",
   "scripts": {
