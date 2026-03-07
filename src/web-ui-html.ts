@@ -195,7 +195,7 @@ function renderFileList() {
 
 function doSync(action) {
   log('Starting ' + action + ' via obsidian:// URI');
-  const uri = 'obsidian://vault-sync?action=' + action
+  const uri = 'obsidian://vaultsync?action=' + action
     + '&token=' + encodeURIComponent(token)
     + '&ip=' + encodeURIComponent(HOST_IP)
     + '&port=' + HOST_PORT;

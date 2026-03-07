@@ -28,8 +28,8 @@ export default class VaultSyncPlugin extends Plugin {
       callback: () => this.connectToSync(),
     });
 
-    // obsidian://vault-sync?action=pull&token=x&ip=x&port=53217
-    this.registerObsidianProtocolHandler('vault-sync', async (params) => {
+    // obsidian://vaultsync?action=pull&token=x&ip=x&port=53217
+    this.registerObsidianProtocolHandler('vaultsync', async (params) => {
       const { action, token, ip, port } = params;
       if (!action || !token || !ip) {
         new Notice('[VaultSync] Invalid URI — missing action, token, or ip');
